@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Platform, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,7 +9,14 @@ import { Button } from '@/components/Button';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { useTheme, spacing, typography, radius } from '@/lib/theme';
 import { getGoals, updateGoals, getSetting, setSetting } from '@/lib/queries';
-import { ensureNotificationPermission, scheduleWeeklyReminder, cancelWeeklyReminder } from '@/lib/notifications';
+import {
+  ensureNotificationPermission,
+  scheduleWeeklyReminder,
+  cancelWeeklyReminder,
+  supportsScheduledReminders,
+} from '@/lib/notifications';
+import { exportBackup, restoreBackup } from '@/lib/backup';
+import { confirmAction, notify } from '@/lib/confirm';
 import { apiUrl } from '@/lib/api';
 import { WEEKDAY_LABELS } from '@/lib/date';
 
@@ -39,6 +46,11 @@ export default function SettingsScreen() {
   const [minute, setMinute] = useState('0');
 
   const [aiConfigured, setAiConfigured] = useState<boolean | null>(null);
+
+  const [exporting, setExporting] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [restoring, setRestoring] = useState(false);
+  const [restoreMessage, setRestoreMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const g = await getGoals(db);
@@ -98,6 +110,39 @@ export default function SettingsScreen() {
     }
   }
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await exportBackup(db);
+    } catch (e) {
+      notify('Export failed', e instanceof Error ? e.message : 'Something went wrong.');
+    }
+    setExporting(false);
+  }
+
+  function handleRestore() {
+    if (!importText.trim()) return;
+    confirmAction(
+      'Restore backup',
+      'This replaces all current food logs, goals, meal plans, and custom foods with the contents of this backup. This can’t be undone.',
+      'Restore',
+      async () => {
+        setRestoring(true);
+        setRestoreMessage(null);
+        try {
+          await restoreBackup(db, importText);
+          setImportText('');
+          setRestoreMessage('Restored successfully.');
+          load();
+        } catch (e) {
+          setRestoreMessage(e instanceof Error ? e.message : 'Restore failed.');
+        }
+        setRestoring(false);
+      },
+      true
+    );
+  }
+
   async function updateSchedule(nextWeekday: number, nextHour: string, nextMinute: string) {
     setWeekday(nextWeekday);
     setHour(nextHour);
@@ -132,22 +177,30 @@ export default function SettingsScreen() {
       <Card>
         <View style={styles.sectionHeader}>
           <Text style={[typography.subtitle, { color: colors.textPrimary }]}>Weekly meal plan reminder</Text>
-          <Switch value={notifEnabled} onValueChange={toggleNotifications} />
+          {supportsScheduledReminders && <Switch value={notifEnabled} onValueChange={toggleNotifications} />}
         </View>
-        {notifEnabled && (
-          <>
-            <Text style={[typography.caption, { color: colors.textMuted }]}>Day</Text>
-            <SegmentedControl
-              options={WEEKDAY_LABELS.map((label, i) => ({ label, value: String(i) }))}
-              value={String(weekday)}
-              onChange={(v) => updateSchedule(Number(v), hour, minute)}
-            />
-            <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.sm }]}>Time (24h)</Text>
-            <View style={styles.row}>
-              <Field label="Hour" value={hour} onChangeText={(v) => updateSchedule(weekday, v, minute)} colors={colors} />
-              <Field label="Minute" value={minute} onChangeText={(v) => updateSchedule(weekday, hour, v)} colors={colors} />
-            </View>
-          </>
+        {!supportsScheduledReminders ? (
+          <Text style={[typography.caption, { color: colors.textMuted }]}>
+            Scheduled reminders aren't available in the web version yet — the browser has no way to run a "notify me
+            every Sunday" schedule on its own; that needs a server, which comes with hosting. You'll instead see a
+            reminder banner in the app itself when it's time to refresh your plan.
+          </Text>
+        ) : (
+          notifEnabled && (
+            <>
+              <Text style={[typography.caption, { color: colors.textMuted }]}>Day</Text>
+              <SegmentedControl
+                options={WEEKDAY_LABELS.map((label, i) => ({ label, value: String(i) }))}
+                value={String(weekday)}
+                onChange={(v) => updateSchedule(Number(v), hour, minute)}
+              />
+              <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.sm }]}>Time (24h)</Text>
+              <View style={styles.row}>
+                <Field label="Hour" value={hour} onChangeText={(v) => updateSchedule(weekday, v, minute)} colors={colors} />
+                <Field label="Minute" value={minute} onChangeText={(v) => updateSchedule(weekday, hour, v)} colors={colors} />
+              </View>
+            </>
+          )
         )}
       </Card>
 
@@ -171,6 +224,47 @@ export default function SettingsScreen() {
             step-by-step instructions.
           </Text>
         )}
+      </Card>
+
+      <Card>
+        <Text style={[typography.subtitle, { color: colors.textPrimary }]}>Backup & restore</Text>
+        <Text style={[typography.caption, { color: colors.textMuted }]}>
+          {Platform.OS === 'web'
+            ? "Your data lives in this browser only. Back it up regularly — browsers can clear site data you haven't opened in a while."
+            : 'Save a copy of your goals, food log, and meal plans, or move them to another device.'}
+        </Text>
+        <Button
+          title={Platform.OS === 'web' ? 'Download backup' : 'Share backup'}
+          variant="secondary"
+          onPress={handleExport}
+          loading={exporting}
+        />
+
+        <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.sm }]}>
+          Restore from a backup — paste the contents of a previously exported file below.
+        </Text>
+        <TextInput
+          value={importText}
+          onChangeText={setImportText}
+          placeholder="Paste backup JSON here"
+          placeholderTextColor={colors.textMuted}
+          multiline
+          style={[
+            styles.input,
+            styles.importInput,
+            { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.surface },
+          ]}
+        />
+        {restoreMessage && (
+          <Text style={[typography.caption, { color: colors.textSecondary }]}>{restoreMessage}</Text>
+        )}
+        <Button
+          title="Restore from backup"
+          variant="secondary"
+          onPress={handleRestore}
+          loading={restoring}
+          disabled={!importText.trim()}
+        />
       </Card>
     </Screen>
   );
@@ -209,5 +303,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: spacing.md,
     ...typography.body,
+  },
+  importInput: {
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
 });

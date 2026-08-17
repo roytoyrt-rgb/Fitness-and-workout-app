@@ -39,8 +39,7 @@ export function MacroRing({ consumed, goal, size = 176, strokeWidth = 14 }: Prop
           strokeLinecap="round"
           strokeDasharray={`${circumference} ${circumference}`}
           strokeDashoffset={dashOffset}
-          rotation={-90}
-          origin={`${size / 2}, ${size / 2}`}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
       <View style={[StyleSheet.absoluteFill, styles.center]}>

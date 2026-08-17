@@ -3,6 +3,14 @@ import { Platform } from 'react-native';
 
 const WEEKLY_REMINDER_ID_KEY = 'weekly-meal-plan-reminder';
 
+// expo-notifications' scheduled/calendar triggers (used for the weekly
+// reminder) have no browser equivalent - there's no OS-level scheduler to
+// hand a "every Sunday at 6pm" trigger to. A real web reminder needs a
+// server to send a Web Push notification at the right time, which only
+// makes sense once this is actually deployed somewhere. Until then, the
+// weekly-reminder UI is disabled on web rather than silently failing.
+export const supportsScheduledReminders = Platform.OS !== 'web';
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -20,6 +28,7 @@ export async function ensureNotificationPermission(): Promise<boolean> {
 }
 
 export async function scheduleWeeklyReminder(weekday: number, hour: number, minute: number) {
+  if (!supportsScheduledReminders) return;
   await cancelWeeklyReminder();
 
   if (Platform.OS === 'android') {
@@ -51,12 +60,19 @@ export async function cancelWeeklyReminder() {
 }
 
 export async function notifyMealPlanUpdated() {
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'Meal plan updated',
-      body: 'Your high-protein meal plan for this week is ready.',
-      data: { screen: 'plan' },
-    },
-    trigger: null,
-  });
+  // Best-effort: an immediate notification is more likely to be supported
+  // on web than a scheduled one, but browser notification permissions and
+  // behavior vary enough that this should never block the calling flow.
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Meal plan updated',
+        body: 'Your high-protein meal plan for this week is ready.',
+        data: { screen: 'plan' },
+      },
+      trigger: null,
+    });
+  } catch (error) {
+    console.warn('notifyMealPlanUpdated failed', error);
+  }
 }

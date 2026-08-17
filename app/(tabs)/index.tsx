@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { MacroRing } from '@/components/MacroRing';
 import { MacroBarRow } from '@/components/MacroBarRow';
 import { useTheme, spacing, typography, radius } from '@/lib/theme';
 import { getGoals, getLogEntriesForDate, getMealPlanForWeek, deleteLogEntry, insertLogEntry } from '@/lib/queries';
+import { confirmAction } from '@/lib/confirm';
 import { sumMacros } from '@/lib/macros';
 import { todayKey, weekStartKey, dayOfWeekMondayFirst, WEEKDAY_LABELS } from '@/lib/date';
 import { MEAL_SLOTS } from '@/lib/types';
@@ -29,7 +30,9 @@ export default function TodayScreen() {
   const [goals, setGoals] = useState<Goals | null>(null);
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [todayPlan, setTodayPlan] = useState<MealPlanItem[]>([]);
+  const [weekPlanIsPersonalized, setWeekPlanIsPersonalized] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   const load = useCallback(async () => {
     const today = new Date();
@@ -41,6 +44,7 @@ export default function TodayScreen() {
     setGoals(g);
     setEntries(e);
     setTodayPlan(plan.filter((p) => p.dayOfWeek === dayOfWeekMondayFirst(today)));
+    setWeekPlanIsPersonalized(plan.some((p) => p.source === 'ai'));
   }, [db]);
 
   useFocusEffect(
@@ -55,18 +59,17 @@ export default function TodayScreen() {
     setRefreshing(false);
   }
 
-  async function handleDelete(entry: LogEntry) {
-    Alert.alert('Remove entry', `Remove "${entry.foodName}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteLogEntry(db, entry.id);
-          load();
-        },
+  function handleDelete(entry: LogEntry) {
+    confirmAction(
+      'Remove entry',
+      `Remove "${entry.foodName}"?`,
+      'Remove',
+      async () => {
+        await deleteLogEntry(db, entry.id);
+        load();
       },
-    ]);
+      true
+    );
   }
 
   async function handleQuickLog(meal: MealPlanItem) {
@@ -112,6 +115,24 @@ export default function TodayScreen() {
           <Text style={[typography.caption, { color: colors.textPrimary }]}>Copy a day</Text>
         </Pressable>
       </View>
+
+      {!weekPlanIsPersonalized && !bannerDismissed && (
+        <Pressable
+          onPress={() => router.push('/scan')}
+          style={[styles.banner, { borderColor: colors.border, backgroundColor: colors.surface }]}
+        >
+          <Ionicons name="restaurant-outline" size={18} color={colors.protein} />
+          <View style={{ flex: 1 }}>
+            <Text style={[typography.caption, { color: colors.textPrimary }]}>Update this week's meal plan</Text>
+            <Text style={[typography.tiny, { color: colors.textMuted }]}>
+              You're on the starter plan — scan your ingredients for one built around what you have.
+            </Text>
+          </View>
+          <Pressable onPress={() => setBannerDismissed(true)} hitSlop={8}>
+            <Ionicons name="close" size={18} color={colors.textMuted} />
+          </Pressable>
+        </Pressable>
+      )}
 
       <Card style={styles.ringCard}>
         <MacroRing consumed={totals.calories} goal={goals.calories} />
@@ -187,6 +208,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
   },

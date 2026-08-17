@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,6 +11,7 @@ import { Card } from '@/components/Card';
 import { getGoals, replaceMealPlanForWeek } from '@/lib/queries';
 import { weekStartKey } from '@/lib/date';
 import { notifyMealPlanUpdated } from '@/lib/notifications';
+import { notify } from '@/lib/confirm';
 import { apiUrl } from '@/lib/api';
 import type { MealSlot } from '@/lib/types';
 
@@ -52,7 +53,7 @@ export default function ScanScreen() {
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission needed', 'Please allow access in Settings to continue.');
+      notify('Permission needed', 'Please allow access in Settings to continue.');
       return;
     }
 

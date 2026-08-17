@@ -1,6 +1,6 @@
 # Simple Macros
 
-A simple, high-protein-focused macro tracker and meal planner for iPhone, built with Expo.
+A simple, high-protein-focused macro tracker and meal planner, built with Expo. Runs as an iPhone app (Expo Go / native build) or as a web app you can install to your home screen ("Add to Home Screen" in Safari) — same codebase, same features, no App Store account needed for the web version.
 
 ## Features
 
@@ -16,7 +16,7 @@ The whole app is intentionally minimal: 4 tabs, no clutter, no accounts or sign-
 ## Requirements
 
 - Node.js 20+
-- An iPhone with the **Expo Go** app installed (from the App Store), or a Mac + Xcode for a full native build
+- Either an iPhone with the **Expo Go** app installed (from the App Store), or just a web browser (no phone app needed) — see "Or run it as a web app" below
 - (Optional, for AI meal scanning) an [Anthropic API key](https://console.anthropic.com/settings/keys) — a normal debit card works fine for billing
 
 ## Setup
@@ -50,6 +50,21 @@ npx expo start
 
 Scan the QR code with your iPhone's camera (it'll open in Expo Go), or press `i` to open an iOS simulator if you're on a Mac with Xcode installed.
 
+### Or run it as a web app
+
+```bash
+npx expo start --web
+```
+
+Open the printed `http://localhost:8081` URL. On an iPhone, open that URL in Safari, tap Share → **Add to Home Screen**, and it behaves like an installed app (full-screen, its own icon, no browser chrome).
+
+**Not deployed anywhere yet** — this only runs locally (`npx expo start --web`) until you decide where to host it. A few things to know before you do:
+
+- **Storage is per-browser.** Your food log lives in the browser's local storage, not in the cloud. iOS Safari can clear that storage if you don't open the app for a while (Apple's anti-tracking policy) — use **Settings → Backup & restore** to download a JSON backup periodically, and to restore one if that ever happens.
+- **Weekly reminders don't work on web** (yet). There's no browser equivalent of a native scheduled notification without a server sending a real push notification at the right time — that only makes sense once this is hosted somewhere persistent. In the meantime, the app shows an in-app banner on the Today screen when your meal plan is still on the unpersonalized starter plan, as a lighter-weight nudge.
+- **Two response headers are required** wherever this ends up hosted: `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`. The local data storage (`expo-sqlite`'s web backend) needs these to work in the browser at all — `metro.config.js` already sets them for local dev; most hosts (Cloudflare Pages, Vercel, Netlify, etc.) let you set custom response headers via a config file.
+- **The AI/barcode server routes** (`app/api/*`) need to run somewhere live once deployed — they can't just be static files. Options include EAS Hosting or any Node-capable host; a lighter-weight alternative is moving just those routes to a serverless platform's free tier (e.g. Cloudflare Workers) if you want to avoid EAS/Apple costs entirely, since the web path doesn't need Apple's involvement at all.
+
 ## How each feature works
 
 - **Macro calculator**: `app/(tabs)/index.tsx` (Today) logs food against a small built-in food database (`lib/foods.ts`) or custom entries; `lib/macros.ts` does the per-gram math.
@@ -64,6 +79,7 @@ Scan the QR code with your iPhone's camera (it'll open in Expo Go), or press `i`
 
 ```
 app/
+  +html.tsx        Web-only root HTML document (PWA manifest, iOS meta tags)
   (tabs)/          Today, Plan, Progress, Settings
   add-food.tsx     Log-food modal (search + custom entry)
   barcode.tsx      Barcode scan → macro lookup → log flow
@@ -71,10 +87,14 @@ app/
   scan.tsx         AI ingredient photo → meal plan flow
   meal/[id].tsx    Meal detail (ingredients + steps)
   api/             Server-side routes (Claude calls, never bundled to client)
-lib/                Data layer, theming, macro math, notifications
+lib/                Data layer, theming, macro math, notifications, backup
 components/         Reusable UI (charts, cards, buttons, macro rings)
+public/             Static web assets (PWA manifest + icons)
 ```
 
-## Building a real installable app (optional)
+## Getting this onto your phone permanently (optional)
 
-Running via Expo Go is the fastest way to use this day-to-day. If you'd rather have it as a standalone app icon on your home screen (no Expo Go required), look into [EAS Build](https://docs.expo.dev/build/introduction/) for a free development or ad-hoc build you can install via TestFlight — that's a separate step from anything in this repo and requires an Apple ID.
+Two ways to get a "real" app icon instead of running the dev server each time:
+
+- **Web (free)**: deploy the web build (see above) anywhere that supports the required response headers, then "Add to Home Screen" in Safari. No App Store account needed.
+- **Native (costs $99/year)**: [EAS Build](https://docs.expo.dev/build/introduction/) for a development or ad-hoc build installed via TestFlight. Requires enrolling in Apple's Developer Program — that's Apple's fee for installing anything outside Expo Go/the App Store, not something specific to this project.
