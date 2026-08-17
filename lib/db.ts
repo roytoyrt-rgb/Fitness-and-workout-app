@@ -92,5 +92,23 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     version = 2;
   }
 
+  if (version === 2) {
+    // The seed list grew from ~35 to 150+ foods. Add anything new by name
+    // so existing installs (and existing test/dev databases) catch up
+    // without duplicating what a fresh install already got in version 0.
+    for (const food of SEED_FOODS) {
+      const existing = await db.getFirstAsync<{ id: number }>('SELECT id FROM foods WHERE name = ? AND is_custom = 0', [
+        food.name,
+      ]);
+      if (!existing) {
+        await db.runAsync(
+          'INSERT INTO foods (name, calories_per_100, protein_per_100, carbs_per_100, fat_per_100, default_serving_g, is_custom) VALUES (?, ?, ?, ?, ?, ?, 0)',
+          [food.name, food.caloriesPer100, food.proteinPer100, food.carbsPer100, food.fatPer100, food.defaultServingG]
+        );
+      }
+    }
+    version = 3;
+  }
+
   await db.execAsync(`PRAGMA user_version = ${version}`);
 }
