@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Simple Macros",
+    "slug": "fitness-and-workout-app",
+    "version": "1.0.0",
+    "scheme": "simplemacros",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.simplemacros.app"
+    },
+    "android": {
+      "package": "com.simplemacros.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["CAMERA", "READ_MEDIA_IMAGES"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "server"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-status-bar",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2a78d6"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Simple Macros can read photos of ingredients from your library to suggest a high-protein meal plan.",
+          "cameraPermission": "Simple Macros uses the camera to photograph ingredients so it can suggest a high-protein meal plan."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
