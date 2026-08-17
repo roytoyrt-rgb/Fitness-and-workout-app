@@ -9,6 +9,13 @@ export function todayKey(): string {
   return toDateKey(new Date());
 }
 
+// `new Date("YYYY-MM-DD")` parses as UTC midnight, which shifts a day in
+// negative-offset timezones. Parse the components as local time instead.
+export function parseDateKey(dateKey: string): Date {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 export function addDays(d: Date, days: number): Date {
   const copy = new Date(d);
   copy.setDate(copy.getDate() + days);

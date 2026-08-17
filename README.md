@@ -5,6 +5,8 @@ A simple, high-protein-focused macro tracker and meal planner for iPhone, built 
 ## Features
 
 - **Macro tracking** — log food and see calories/protein/carbs/fat vs your daily goals, with 7‑day, month, and year graphs.
+- **Barcode scanning** — scan a product's barcode, get its macros from a free product database, and see calories/macros scale live as you change the grams (plus a flat kcal-per-gram figure so you can compare density between products regardless of portion). Unrecognized products can be entered manually once and are remembered by barcode for next time.
+- **Copy a previous day** — reuse a day's food log (from last week or further back) instead of re-entering it, with the option to uncheck anything you don't want to repeat.
 - **AI meal planning from photos** — photograph what's in your fridge/pantry and Claude builds a simple, high‑protein 7‑day meal plan around it.
 - **Weekly reminders** — a local notification on the day/time you choose, plus an immediate notification whenever your plan is regenerated.
 - **A starter meal library** — even without AI set up, the Plan tab auto-fills a week of simple, high-protein meals from a built-in library.
@@ -51,6 +53,8 @@ Scan the QR code with your iPhone's camera (it'll open in Expo Go), or press `i`
 ## How each feature works
 
 - **Macro calculator**: `app/(tabs)/index.tsx` (Today) logs food against a small built-in food database (`lib/foods.ts`) or custom entries; `lib/macros.ts` does the per-gram math.
+- **Barcode scanning**: `app/barcode.tsx` uses `expo-camera`'s barcode scanner (EAN-13/8, UPC-A/E, Code128). It first checks your local food database for that barcode (instant, works offline for repeat scans), then falls back to `app/api/barcode+api.ts`, which looks the product up on [Open Food Facts](https://world.openfoodfacts.org) (free, no API key) and caches the result locally by barcode. Grams entered scale the macros live; a kcal/g figure is shown alongside so the "intensity" is visible independent of portion size.
+- **Copy a previous day**: `app/copy-day.tsx` lists past days that have logged food (via `getRecentLogDates` in `lib/queries.ts`), lets you review/uncheck individual items, then duplicates the checked entries into today with `copyLogEntries`.
 - **Graphs**: `app/(tabs)/progress.tsx` aggregates your log (`lib/aggregate.ts`) into 7‑day, 30‑day, and 12‑month views, rendered with lightweight custom SVG charts (`components/BarTrendChart.tsx`, `components/LineTrendChart.tsx`) — no heavy charting dependency.
 - **AI photo → meal plan**: `app/scan.tsx` takes photos with `expo-image-picker`, sends them to `app/api/identify-ingredients+api.ts` (Claude vision → ingredient list), then `app/api/generate-meal-plan+api.ts` (Claude → a full 7‑day, high-protein plan). The plan is saved locally and replaces the current week in the Plan tab.
 - **Notifications**: `lib/notifications.ts` schedules a weekly local reminder (`expo-notifications`) and fires an immediate one whenever a new AI plan is generated. Configure the day/time in Settings.
@@ -62,6 +66,8 @@ Scan the QR code with your iPhone's camera (it'll open in Expo Go), or press `i`
 app/
   (tabs)/          Today, Plan, Progress, Settings
   add-food.tsx     Log-food modal (search + custom entry)
+  barcode.tsx      Barcode scan → macro lookup → log flow
+  copy-day.tsx     Copy a previous day's log into today
   scan.tsx         AI ingredient photo → meal plan flow
   meal/[id].tsx    Meal detail (ingredients + steps)
   api/             Server-side routes (Claude calls, never bundled to client)

@@ -1,5 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import type { Food, Goals, LogEntry, MealPlanItem, MealSlot } from './types';
+import type { DaySummary, Food, Goals, LogEntry, MealPlanItem, MealSlot } from './types';
 
 // ---- Goals ----
 
@@ -45,6 +45,7 @@ function mapFoodRow(row: any): Food {
     fatPer100: row.fat_per_100,
     defaultServingG: row.default_serving_g,
     isCustom: !!row.is_custom,
+    barcode: row.barcode ?? null,
   };
 }
 
@@ -56,13 +57,26 @@ export async function searchFoods(db: SQLiteDatabase, query: string): Promise<Fo
   return rows.map(mapFoodRow);
 }
 
+export async function findFoodByBarcode(db: SQLiteDatabase, barcode: string): Promise<Food | null> {
+  const row = await db.getFirstAsync<any>('SELECT * FROM foods WHERE barcode = ?', [barcode]);
+  return row ? mapFoodRow(row) : null;
+}
+
 export async function insertCustomFood(
   db: SQLiteDatabase,
   food: Omit<Food, 'id' | 'isCustom'>
 ): Promise<number> {
   const result = await db.runAsync(
-    'INSERT INTO foods (name, calories_per_100, protein_per_100, carbs_per_100, fat_per_100, default_serving_g, is_custom) VALUES (?, ?, ?, ?, ?, ?, 1)',
-    [food.name, food.caloriesPer100, food.proteinPer100, food.carbsPer100, food.fatPer100, food.defaultServingG]
+    'INSERT INTO foods (name, calories_per_100, protein_per_100, carbs_per_100, fat_per_100, default_serving_g, is_custom, barcode) VALUES (?, ?, ?, ?, ?, ?, 1, ?)',
+    [
+      food.name,
+      food.caloriesPer100,
+      food.proteinPer100,
+      food.carbsPer100,
+      food.fatPer100,
+      food.defaultServingG,
+      food.barcode ?? null,
+    ]
   );
   return result.lastInsertRowId;
 }
@@ -125,6 +139,49 @@ export async function insertLogEntry(
     ]
   );
   return result.lastInsertRowId;
+}
+
+export async function getRecentLogDates(
+  db: SQLiteDatabase,
+  excludeDate: string,
+  limit = 60
+): Promise<DaySummary[]> {
+  const rows = await db.getAllAsync<{ date: string; itemCount: number; calories: number }>(
+    `SELECT date, COUNT(*) as itemCount, SUM(calories) as calories
+     FROM log_entries
+     WHERE date != ?
+     GROUP BY date
+     ORDER BY date DESC
+     LIMIT ?`,
+    [excludeDate, limit]
+  );
+  return rows;
+}
+
+export async function copyLogEntries(
+  db: SQLiteDatabase,
+  entries: LogEntry[],
+  toDate: string
+): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    for (const entry of entries) {
+      await db.runAsync(
+        'INSERT INTO log_entries (date, food_id, food_name, grams, calories, protein, carbs, fat, meal_slot, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          toDate,
+          entry.foodId,
+          entry.foodName,
+          entry.grams,
+          entry.calories,
+          entry.protein,
+          entry.carbs,
+          entry.fat,
+          entry.mealSlot,
+          new Date().toISOString(),
+        ]
+      );
+    }
+  });
 }
 
 export async function deleteLogEntry(db: SQLiteDatabase, id: number): Promise<void> {

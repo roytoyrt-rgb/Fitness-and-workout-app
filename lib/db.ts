@@ -84,5 +84,13 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     version = 1;
   }
 
+  if (version === 1) {
+    await db.execAsync(`
+      ALTER TABLE foods ADD COLUMN barcode TEXT;
+      CREATE UNIQUE INDEX idx_foods_barcode ON foods(barcode) WHERE barcode IS NOT NULL;
+    `);
+    version = 2;
+  }
+
   await db.execAsync(`PRAGMA user_version = ${version}`);
 }

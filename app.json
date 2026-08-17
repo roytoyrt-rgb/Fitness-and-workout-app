@@ -44,6 +44,13 @@
           "photosPermission": "Simple Macros can read photos of ingredients from your library to suggest a high-protein meal plan.",
           "cameraPermission": "Simple Macros uses the camera to photograph ingredients so it can suggest a high-protein meal plan."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Simple Macros uses the camera to scan product barcodes and look up their nutrition.",
+          "recordAudioAndroid": false
+        }
       ]
     ],
     "experiments": {

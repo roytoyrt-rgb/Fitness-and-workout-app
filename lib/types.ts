@@ -23,6 +23,13 @@ export interface Food {
   fatPer100: number;
   defaultServingG: number;
   isCustom: boolean;
+  barcode?: string | null;
+}
+
+export interface DaySummary {
+  date: string;
+  itemCount: number;
+  calories: number;
 }
 
 export interface LogEntry {

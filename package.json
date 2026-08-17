@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
     "expo": "~57.0.14",
+    "expo-camera": "~57.0.3",
     "expo-constants": "~57.0.12",
     "expo-haptics": "~57.0.1",
     "expo-image-picker": "~57.0.11",

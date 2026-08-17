@@ -96,6 +96,23 @@ export default function TodayScreen() {
         <Text style={[typography.caption, { color: colors.textMuted }]}>{todayLabel}</Text>
       </View>
 
+      <View style={styles.quickActions}>
+        <Pressable
+          onPress={() => router.push('/barcode')}
+          style={[styles.quickAction, { borderColor: colors.border, backgroundColor: colors.card }]}
+        >
+          <Ionicons name="barcode-outline" size={18} color={colors.protein} />
+          <Text style={[typography.caption, { color: colors.textPrimary }]}>Scan barcode</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/copy-day')}
+          style={[styles.quickAction, { borderColor: colors.border, backgroundColor: colors.card }]}
+        >
+          <Ionicons name="copy-outline" size={18} color={colors.protein} />
+          <Text style={[typography.caption, { color: colors.textPrimary }]}>Copy a day</Text>
+        </Pressable>
+      </View>
+
       <Card style={styles.ringCard}>
         <MacroRing consumed={totals.calories} goal={goals.calories} />
         <View style={{ width: '100%', gap: spacing.md }}>
@@ -162,6 +179,17 @@ export default function TodayScreen() {
 
 const styles = StyleSheet.create({
   ringCard: { alignItems: 'center', gap: spacing.lg },
+  quickActions: { flexDirection: 'row', gap: spacing.sm },
+  quickAction: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   entryRow: {
     flexDirection: 'row',

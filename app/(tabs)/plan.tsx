@@ -8,7 +8,7 @@ import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { useTheme, spacing, typography, radius } from '@/lib/theme';
 import { getMealPlanForWeek, replaceMealPlanForWeek } from '@/lib/queries';
-import { weekStartKey, addDays, toDateKey, WEEKDAY_LABELS, formatShortDate } from '@/lib/date';
+import { weekStartKey, addDays, toDateKey, parseDateKey, WEEKDAY_LABELS, formatShortDate } from '@/lib/date';
 import { buildLibraryWeekPlan } from '@/lib/mealTemplates';
 import { MEAL_SLOTS } from '@/lib/types';
 import type { MealPlanItem, MealSlot } from '@/lib/types';
@@ -34,7 +34,7 @@ export default function PlanScreen() {
     if (items.length === 0) {
       // First run / new week with nothing yet: seed a simple high-protein
       // plan from the built-in library so the app is useful immediately.
-      const weekIndex = Math.floor(new Date(start).getTime() / (1000 * 60 * 60 * 24 * 7));
+      const weekIndex = Math.floor(parseDateKey(start).getTime() / (1000 * 60 * 60 * 24 * 7));
       const seeded = buildLibraryWeekPlan(weekIndex);
       await replaceMealPlanForWeek(
         db,
@@ -68,7 +68,7 @@ export default function PlanScreen() {
   if (loading) return null;
 
   const start = weekStartKey(new Date());
-  const startDate = new Date(start);
+  const startDate = parseDateKey(start);
   const isAiPlan = plan.some((p) => p.source === 'ai');
 
   return (
