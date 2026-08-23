@@ -7,7 +7,7 @@ import { Screen } from '@/components/Screen';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { useTheme, spacing, typography, radius } from '@/lib/theme';
-import { getMealPlanForWeek, replaceMealPlanForWeek } from '@/lib/queries';
+import { getMealPlanForWeek, replaceMealPlanForWeek, getPreferenceNames } from '@/lib/queries';
 import { weekStartKey, addDays, toDateKey, parseDateKey, WEEKDAY_LABELS, formatShortDate } from '@/lib/date';
 import { buildLibraryWeekPlan } from '@/lib/mealTemplates';
 import { MEAL_SLOTS } from '@/lib/types';
@@ -35,7 +35,8 @@ export default function PlanScreen() {
       // First run / new week with nothing yet: seed a simple high-protein
       // plan from the built-in library so the app is useful immediately.
       const weekIndex = Math.floor(parseDateKey(start).getTime() / (1000 * 60 * 60 * 24 * 7));
-      const seeded = buildLibraryWeekPlan(weekIndex);
+      const { likes, dislikes } = await getPreferenceNames(db);
+      const seeded = buildLibraryWeekPlan(weekIndex, likes, dislikes);
       await replaceMealPlanForWeek(
         db,
         start,

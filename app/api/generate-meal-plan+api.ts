@@ -4,6 +4,8 @@ import type { MealSlot } from '@/lib/types';
 interface RequestBody {
   ingredients: string[];
   goals: { calories: number; protein: number; carbs: number; fat: number };
+  likes?: string[];
+  dislikes?: string[];
 }
 
 interface GeneratedMeal {
@@ -31,6 +33,8 @@ Rules:
 - Reuse ingredients across meals during the week so the user doesn't need to buy dozens of items and nothing goes to waste.
 - Daily totals across the 4 meals should land close to the user's daily targets (given in the prompt), within about 10%.
 - Vary meals across the week - don't repeat the exact same meal more than twice.
+- If the user lists disliked foods, never use them as an ingredient in any meal, full stop - find another way to hit the targets instead.
+- If the user lists liked foods, use them where it makes sense, but don't force one into every meal.
 
 Respond with ONLY compact JSON matching this exact shape, no other text, no markdown fences:
 {"meals": [{"dayOfWeek": number, "mealSlot": "breakfast"|"lunch"|"dinner"|"snack", "title": string, "ingredients": string[], "steps": string[], "calories": number, "protein": number, "carbs": number, "fat": number}]}`;
@@ -46,8 +50,12 @@ export async function POST(request: Request): Promise<Response> {
     const userPrompt = [
       `Ingredients on hand: ${body.ingredients.join(', ')}.`,
       `Daily targets: ${body.goals.calories} calories, ${body.goals.protein}g protein, ${body.goals.carbs}g carbs, ${body.goals.fat}g fat.`,
+      body.dislikes?.length ? `Disliked foods - never use these: ${body.dislikes.join(', ')}.` : '',
+      body.likes?.length ? `Liked foods - use where sensible: ${body.likes.join(', ')}.` : '',
       'Build the 7-day, 28-meal plan now.',
-    ].join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
 
     const text = await callClaude({
       system: SYSTEM_PROMPT,

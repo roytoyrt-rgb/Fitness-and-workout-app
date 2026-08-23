@@ -143,15 +143,62 @@ export function templatesFor(mealSlot: MealTemplate['mealSlot']): MealTemplate[]
   return MEAL_LIBRARY.filter((m) => m.mealSlot === mealSlot);
 }
 
+// Preferences are stored against food-database names like "Chicken breast,
+// cooked" or "Mushrooms, sauteed", while meal template ingredients are
+// free-text like "150g chicken breast, cooked". Reduce a food name to its
+// first, most distinctive word/phrase (drop the ", cooked"-style suffix)
+// and match that as a substring - imprecise, but good enough to keep
+// "no mushrooms" out of a meal plan without needing exact-string matching.
+function keywordFor(foodName: string): string {
+  return foodName.split(',')[0].trim().toLowerCase();
+}
+
+function templateText(template: MealTemplate): string {
+  return `${template.title} ${template.ingredients.join(' ')}`.toLowerCase();
+}
+
+function matchesAny(template: MealTemplate, foodNames: string[]): boolean {
+  if (foodNames.length === 0) return false;
+  const text = templateText(template);
+  return foodNames.some((name) => {
+    const keyword = keywordFor(name);
+    return keyword.length > 0 && text.includes(keyword);
+  });
+}
+
+// Filters out disliked templates (falling back to the full list if that
+// would leave nothing for a slot), then sorts liked-matching templates
+// first. Stable otherwise, so the deterministic weekly rotation below
+// still varies meal-to-meal rather than always picking the same "liked" one.
+export function rankedTemplatesFor(mealSlot: MealTemplate['mealSlot'], likes: string[], dislikes: string[]): MealTemplate[] {
+  const all = templatesFor(mealSlot);
+  const allowed = all.filter((t) => !matchesAny(t, dislikes));
+  const pool = allowed.length > 0 ? allowed : all;
+  return [...pool].sort((a, b) => Number(matchesAny(b, likes)) - Number(matchesAny(a, likes)));
+}
+
+export function alternativesFor(
+  mealSlot: MealTemplate['mealSlot'],
+  likes: string[],
+  dislikes: string[],
+  excludeTitle: string
+): MealTemplate[] {
+  return rankedTemplatesFor(mealSlot, likes, dislikes).filter((t) => t.title !== excludeTitle);
+}
+
 // Deterministic rotation so the same week offset always returns the same
 // simple plan, but different weeks vary.
-export function buildLibraryWeekPlan(weekIndex: number): { dayOfWeek: number; mealSlot: MealTemplate['mealSlot']; template: MealTemplate }[] {
+export function buildLibraryWeekPlan(
+  weekIndex: number,
+  likes: string[] = [],
+  dislikes: string[] = []
+): { dayOfWeek: number; mealSlot: MealTemplate['mealSlot']; template: MealTemplate }[] {
   const slots: MealTemplate['mealSlot'][] = ['breakfast', 'lunch', 'dinner', 'snack'];
   const plan: { dayOfWeek: number; mealSlot: MealTemplate['mealSlot']; template: MealTemplate }[] = [];
 
   for (let day = 0; day < 7; day++) {
     slots.forEach((slot, slotIndex) => {
-      const options = templatesFor(slot);
+      const options = rankedTemplatesFor(slot, likes, dislikes);
       const idx = (weekIndex + day + slotIndex) % options.length;
       plan.push({ dayOfWeek: day, mealSlot: slot, template: options[idx] });
     });

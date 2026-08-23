@@ -30,6 +30,7 @@ export default function RootLayout() {
           <Stack.Screen name="scan" options={{ presentation: 'modal', title: 'Scan Ingredients' }} />
           <Stack.Screen name="barcode" options={{ presentation: 'modal', title: 'Scan Barcode' }} />
           <Stack.Screen name="copy-day" options={{ presentation: 'modal', title: 'Copy a Day' }} />
+          <Stack.Screen name="preferences" options={{ presentation: 'modal', title: 'Food Preferences' }} />
           <Stack.Screen name="meal/[id]" options={{ title: 'Meal' }} />
         </Stack>
       </SQLiteProvider>

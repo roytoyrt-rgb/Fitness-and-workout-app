@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, spacing, typography, radius } from '@/lib/theme';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
-import { getGoals, replaceMealPlanForWeek } from '@/lib/queries';
+import { getGoals, replaceMealPlanForWeek, getPreferenceNames } from '@/lib/queries';
 import { weekStartKey } from '@/lib/date';
 import { notifyMealPlanUpdated } from '@/lib/notifications';
 import { notify } from '@/lib/confirm';
@@ -118,12 +118,15 @@ export default function ScanScreen() {
     setError(null);
     try {
       const goals = await getGoals(db);
+      const { likes, dislikes } = await getPreferenceNames(db);
       const response = await fetch(apiUrl('/api/generate-meal-plan'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           ingredients,
           goals: { calories: goals.calories, protein: goals.protein, carbs: goals.carbs, fat: goals.fat },
+          likes,
+          dislikes,
         }),
       });
       const json = await response.json();

@@ -1,5 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import type { DaySummary, Food, Goals, LogEntry, MealPlanItem, MealSlot } from './types';
+import type { DaySummary, Food, FoodPreference, Goals, LogEntry, MealPlanItem, MealSlot, MealTemplate, PreferenceType } from './types';
 
 // ---- Goals ----
 
@@ -220,6 +220,28 @@ export async function getMealPlanItem(db: SQLiteDatabase, id: number): Promise<M
   return row ? mapMealPlanRow(row) : null;
 }
 
+export async function updateMealPlanItemContent(
+  db: SQLiteDatabase,
+  id: number,
+  template: MealTemplate,
+  source: MealPlanItem['source']
+): Promise<void> {
+  await db.runAsync(
+    'UPDATE meal_plan_items SET title = ?, ingredients = ?, steps = ?, calories = ?, protein = ?, carbs = ?, fat = ?, source = ? WHERE id = ?',
+    [
+      template.title,
+      JSON.stringify(template.ingredients),
+      JSON.stringify(template.steps),
+      template.calories,
+      template.protein,
+      template.carbs,
+      template.fat,
+      source,
+      id,
+    ]
+  );
+}
+
 export async function replaceMealPlanForWeek(
   db: SQLiteDatabase,
   weekStart: string,
@@ -260,4 +282,40 @@ export async function setSetting(db: SQLiteDatabase, key: string, value: string)
     key,
     value,
   ]);
+}
+
+// ---- Food preferences ----
+
+function mapPreferenceRow(row: any): FoodPreference {
+  return {
+    id: row.id,
+    foodName: row.food_name,
+    preference: row.preference,
+    createdAt: row.created_at,
+  };
+}
+
+export async function getFoodPreferences(db: SQLiteDatabase): Promise<FoodPreference[]> {
+  const rows = await db.getAllAsync<any>('SELECT * FROM food_preferences ORDER BY food_name COLLATE NOCASE ASC');
+  return rows.map(mapPreferenceRow);
+}
+
+export async function getPreferenceNames(db: SQLiteDatabase): Promise<{ likes: string[]; dislikes: string[] }> {
+  const prefs = await getFoodPreferences(db);
+  return {
+    likes: prefs.filter((p) => p.preference === 'like').map((p) => p.foodName),
+    dislikes: prefs.filter((p) => p.preference === 'dislike').map((p) => p.foodName),
+  };
+}
+
+export async function setFoodPreference(db: SQLiteDatabase, foodName: string, preference: PreferenceType): Promise<void> {
+  await db.runAsync(
+    `INSERT INTO food_preferences (food_name, preference, created_at) VALUES (?, ?, ?)
+     ON CONFLICT(food_name COLLATE NOCASE) DO UPDATE SET preference = excluded.preference`,
+    [foodName, preference, new Date().toISOString()]
+  );
+}
+
+export async function removeFoodPreference(db: SQLiteDatabase, foodName: string): Promise<void> {
+  await db.runAsync('DELETE FROM food_preferences WHERE food_name = ? COLLATE NOCASE', [foodName]);
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Platform, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
@@ -33,6 +33,7 @@ function toSundayFirst(mondayFirstIndex: number): number {
 export default function SettingsScreen() {
   const { colors } = useTheme();
   const db = useSQLiteContext();
+  const router = useRouter();
 
   const [calories, setCalories] = useState('');
   const [protein, setProtein] = useState('');
@@ -172,6 +173,18 @@ export default function SettingsScreen() {
           <Field label="Fat (g)" value={fat} onChangeText={setFat} colors={colors} />
         </View>
         <Button title="Save goals" onPress={saveGoals} loading={saving} />
+      </Card>
+
+      <Card>
+        <Pressable style={styles.sectionHeader} onPress={() => router.push('/preferences')}>
+          <View>
+            <Text style={[typography.subtitle, { color: colors.textPrimary }]}>Food preferences</Text>
+            <Text style={[typography.caption, { color: colors.textMuted }]}>
+              Foods you like or dislike, used to steer meal plans
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </Pressable>
       </Card>
 
       <Card>

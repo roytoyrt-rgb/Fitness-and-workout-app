@@ -1,22 +1,47 @@
-import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Screen } from '@/components/Screen';
 import { Card } from '@/components/Card';
+import { Button } from '@/components/Button';
 import { useTheme, spacing, typography } from '@/lib/theme';
-import { getMealPlanItem } from '@/lib/queries';
-import type { MealPlanItem } from '@/lib/types';
+import { getMealPlanItem, updateMealPlanItemContent, getPreferenceNames } from '@/lib/queries';
+import { alternativesFor } from '@/lib/mealTemplates';
+import type { MealPlanItem, MealTemplate } from '@/lib/types';
 
 export default function MealDetailScreen() {
   const { colors } = useTheme();
   const db = useSQLiteContext();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [meal, setMeal] = useState<MealPlanItem | null>(null);
+  const [alternatives, setAlternatives] = useState<MealTemplate[]>([]);
+  const [showAlternatives, setShowAlternatives] = useState(false);
+  const [swapping, setSwapping] = useState(false);
 
-  useEffect(() => {
-    getMealPlanItem(db, Number(id)).then(setMeal);
+  const load = useCallback(async () => {
+    const item = await getMealPlanItem(db, Number(id));
+    setMeal(item);
+    if (item) {
+      const { likes, dislikes } = await getPreferenceNames(db);
+      setAlternatives(alternativesFor(item.mealSlot, likes, dislikes, item.title));
+    }
   }, [db, id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  async function chooseAlternative(template: MealTemplate) {
+    if (!meal) return;
+    setSwapping(true);
+    await updateMealPlanItemContent(db, meal.id, template, 'library');
+    setShowAlternatives(false);
+    setSwapping(false);
+    load();
+  }
 
   if (!meal) return null;
 
@@ -53,6 +78,36 @@ export default function MealDetailScreen() {
           </Text>
         ))}
       </Card>
+
+      <Button
+        title={showAlternatives ? 'Hide other options' : 'Choose a different meal'}
+        variant="secondary"
+        onPress={() => setShowAlternatives((v) => !v)}
+      />
+
+      {showAlternatives && (
+        <Card>
+          {alternatives.length === 0 ? (
+            <Text style={[typography.body, { color: colors.textMuted }]}>No other options for this meal slot.</Text>
+          ) : (
+            alternatives.map((template) => (
+              <Pressable
+                key={template.title}
+                onPress={() => chooseAlternative(template)}
+                disabled={swapping}
+                style={[styles.altRow, { borderColor: colors.border }]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[typography.body, { color: colors.textPrimary }]}>{template.title}</Text>
+                  <Text style={[typography.tiny, { color: colors.textMuted }]}>
+                    {Math.round(template.calories)} kcal · {Math.round(template.protein)}g protein
+                  </Text>
+                </View>
+              </Pressable>
+            ))
+          )}
+        </Card>
+      )}
     </Screen>
   );
 }
@@ -69,4 +124,8 @@ function Macro({ label, value, colors }: { label: string; value: string; colors:
 const styles = StyleSheet.create({
   macroRow: { flexDirection: 'row', justifyContent: 'space-between' },
   macroItem: { alignItems: 'center', flex: 1 },
+  altRow: {
+    paddingVertical: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
 });

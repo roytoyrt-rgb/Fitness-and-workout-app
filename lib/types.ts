@@ -73,3 +73,12 @@ export interface MealTemplate {
 }
 
 export type ChartRange = 'week' | 'month' | 'year';
+
+export type PreferenceType = 'like' | 'dislike';
+
+export interface FoodPreference {
+  id: number;
+  foodName: string;
+  preference: PreferenceType;
+  createdAt: string;
+}
