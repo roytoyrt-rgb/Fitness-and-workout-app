@@ -8,7 +8,7 @@ import { Button } from '@/components/Button';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { searchFoods, insertCustomFood, insertLogEntry } from '@/lib/queries';
 import { macrosForGrams } from '@/lib/macros';
-import { todayKey } from '@/lib/date';
+import { todayKey, formatShortDate } from '@/lib/date';
 import { MEAL_SLOTS } from '@/lib/types';
 import type { Food, MealSlot } from '@/lib/types';
 
@@ -18,7 +18,8 @@ export default function AddFoodModal() {
   const { colors } = useTheme();
   const db = useSQLiteContext();
   const router = useRouter();
-  const params = useLocalSearchParams<{ slot?: MealSlot }>();
+  const params = useLocalSearchParams<{ slot?: MealSlot; date?: string }>();
+  const targetDate = params.date ?? todayKey();
 
   const [mode, setMode] = useState<'search' | 'custom'>('search');
   const [slot, setSlot] = useState<MealSlot>(params.slot ?? 'breakfast');
@@ -78,7 +79,7 @@ export default function AddFoodModal() {
       Number(grams)
     );
     await insertLogEntry(db, {
-      date: todayKey(),
+      date: targetDate,
       foodId: selected.id,
       foodName: selected.name,
       grams: Number(grams),
@@ -112,7 +113,7 @@ export default function AddFoodModal() {
     }
 
     await insertLogEntry(db, {
-      date: todayKey(),
+      date: targetDate,
       foodId,
       foodName: customName,
       grams: 0,
@@ -135,6 +136,10 @@ export default function AddFoodModal() {
             value={mode}
             onChange={setMode}
           />
+
+          {targetDate !== todayKey() && (
+            <Text style={[typography.caption, { color: colors.protein }]}>Logging to {formatShortDate(targetDate)}</Text>
+          )}
 
           <View>
             <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.xs }]}>Meal</Text>

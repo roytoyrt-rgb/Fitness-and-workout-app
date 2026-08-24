@@ -11,7 +11,7 @@ import { useTheme, spacing, typography, radius } from '@/lib/theme';
 import { getGoals, getLogEntriesForDate, getMealPlanForWeek, deleteLogEntry, insertLogEntry } from '@/lib/queries';
 import { confirmAction } from '@/lib/confirm';
 import { sumMacros } from '@/lib/macros';
-import { todayKey, weekStartKey, dayOfWeekMondayFirst, WEEKDAY_LABELS } from '@/lib/date';
+import { todayKey, weekStartKey, dayOfWeekMondayFirst, addDays, parseDateKey, toDateKey, formatShortDate, WEEKDAY_LABELS } from '@/lib/date';
 import { MEAL_SLOTS } from '@/lib/types';
 import type { Goals, LogEntry, MealPlanItem, MealSlot } from '@/lib/types';
 
@@ -27,31 +27,45 @@ export default function TodayScreen() {
   const db = useSQLiteContext();
   const router = useRouter();
 
+  const [selectedDate, setSelectedDate] = useState(todayKey());
   const [goals, setGoals] = useState<Goals | null>(null);
   const [entries, setEntries] = useState<LogEntry[]>([]);
-  const [todayPlan, setTodayPlan] = useState<MealPlanItem[]>([]);
+  const [dayPlan, setDayPlan] = useState<MealPlanItem[]>([]);
   const [weekPlanIsPersonalized, setWeekPlanIsPersonalized] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
+  const isToday = selectedDate === todayKey();
+
   const load = useCallback(async () => {
-    const today = new Date();
+    const dateObj = parseDateKey(selectedDate);
     const [g, e, plan] = await Promise.all([
       getGoals(db),
-      getLogEntriesForDate(db, todayKey()),
-      getMealPlanForWeek(db, weekStartKey(today)),
+      getLogEntriesForDate(db, selectedDate),
+      getMealPlanForWeek(db, weekStartKey(dateObj)),
     ]);
     setGoals(g);
     setEntries(e);
-    setTodayPlan(plan.filter((p) => p.dayOfWeek === dayOfWeekMondayFirst(today)));
+    setDayPlan(plan.filter((p) => p.dayOfWeek === dayOfWeekMondayFirst(dateObj)));
     setWeekPlanIsPersonalized(plan.some((p) => p.source === 'ai'));
-  }, [db]);
+  }, [db, selectedDate]);
 
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load])
   );
+
+  function goToPreviousDay() {
+    setSelectedDate((d) => toDateKey(addDays(parseDateKey(d), -1)));
+  }
+
+  function goToNextDay() {
+    setSelectedDate((d) => {
+      const next = toDateKey(addDays(parseDateKey(d), 1));
+      return next > todayKey() ? d : next;
+    });
+  }
 
   async function onRefresh() {
     setRefreshing(true);
@@ -74,7 +88,7 @@ export default function TodayScreen() {
 
   async function handleQuickLog(meal: MealPlanItem) {
     await insertLogEntry(db, {
-      date: todayKey(),
+      date: selectedDate,
       foodId: null,
       foodName: meal.title,
       grams: 0,
@@ -90,18 +104,33 @@ export default function TodayScreen() {
   if (!goals) return null;
 
   const totals = sumMacros(entries);
-  const todayLabel = WEEKDAY_LABELS[dayOfWeekMondayFirst(new Date())];
+  const dateObj = parseDateKey(selectedDate);
+  const yesterday = toDateKey(addDays(new Date(), -1));
+  const dayLabel = isToday ? 'Today' : selectedDate === yesterday ? 'Yesterday' : WEEKDAY_LABELS[dayOfWeekMondayFirst(dateObj)];
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textMuted} />}>
-      <View>
-        <Text style={[typography.title, { color: colors.textPrimary }]}>Today</Text>
-        <Text style={[typography.caption, { color: colors.textMuted }]}>{todayLabel}</Text>
+      <View style={styles.dateNav}>
+        <Pressable onPress={goToPreviousDay} hitSlop={8} style={styles.dateNavButton}>
+          <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+        </Pressable>
+        <View style={styles.dateNavCenter}>
+          <Text style={[typography.title, { color: colors.textPrimary }]}>{dayLabel}</Text>
+          <Text style={[typography.caption, { color: colors.textMuted }]}>{formatShortDate(selectedDate)}</Text>
+        </View>
+        <Pressable onPress={goToNextDay} hitSlop={8} disabled={isToday} style={styles.dateNavButton}>
+          <Ionicons name="chevron-forward" size={22} color={isToday ? colors.border : colors.textPrimary} />
+        </Pressable>
       </View>
+      {!isToday && (
+        <Pressable onPress={() => setSelectedDate(todayKey())} style={styles.jumpToday}>
+          <Text style={[typography.caption, { color: colors.protein }]}>Jump to today</Text>
+        </Pressable>
+      )}
 
       <View style={styles.quickActions}>
         <Pressable
-          onPress={() => router.push('/barcode')}
+          onPress={() => router.push({ pathname: '/barcode', params: { date: selectedDate } })}
           style={[styles.quickAction, { borderColor: colors.border, backgroundColor: colors.card }]}
         >
           <Ionicons name="barcode-outline" size={18} color={colors.protein} />
@@ -116,7 +145,7 @@ export default function TodayScreen() {
         </Pressable>
       </View>
 
-      {!weekPlanIsPersonalized && !bannerDismissed && (
+      {isToday && !weekPlanIsPersonalized && !bannerDismissed && (
         <Pressable
           onPress={() => router.push('/scan')}
           style={[styles.banner, { borderColor: colors.border, backgroundColor: colors.surface }]}
@@ -145,7 +174,7 @@ export default function TodayScreen() {
 
       {MEAL_SLOTS.map((slot) => {
         const slotEntries = entries.filter((e) => e.mealSlot === slot);
-        const plannedMeal = todayPlan.find((p) => p.mealSlot === slot);
+        const plannedMeal = dayPlan.find((p) => p.mealSlot === slot);
         const alreadyLoggedPlanned =
           plannedMeal && slotEntries.some((e) => e.foodName === plannedMeal.title);
 
@@ -153,7 +182,7 @@ export default function TodayScreen() {
           <Card key={slot}>
             <View style={styles.sectionHeader}>
               <Text style={[typography.subtitle, { color: colors.textPrimary }]}>{SLOT_LABELS[slot]}</Text>
-              <Pressable onPress={() => router.push({ pathname: '/add-food', params: { slot } })}>
+              <Pressable onPress={() => router.push({ pathname: '/add-food', params: { slot, date: selectedDate } })}>
                 <Ionicons name="add-circle-outline" size={24} color={colors.protein} />
               </Pressable>
             </View>
@@ -199,6 +228,10 @@ export default function TodayScreen() {
 }
 
 const styles = StyleSheet.create({
+  dateNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dateNavButton: { padding: spacing.xs },
+  dateNavCenter: { alignItems: 'center' },
+  jumpToday: { alignSelf: 'center' },
   ringCard: { alignItems: 'center', gap: spacing.lg },
   quickActions: { flexDirection: 'row', gap: spacing.sm },
   quickAction: {

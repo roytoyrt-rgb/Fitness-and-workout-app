@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,7 +9,7 @@ import { Button } from '@/components/Button';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { findFoodByBarcode, insertCustomFood, insertLogEntry } from '@/lib/queries';
 import { macrosForGrams, round1 } from '@/lib/macros';
-import { todayKey } from '@/lib/date';
+import { todayKey, formatShortDate } from '@/lib/date';
 import { apiUrl } from '@/lib/api';
 import { MEAL_SLOTS } from '@/lib/types';
 import type { Food, MealSlot } from '@/lib/types';
@@ -22,6 +22,8 @@ export default function BarcodeScreen() {
   const { colors } = useTheme();
   const db = useSQLiteContext();
   const router = useRouter();
+  const params = useLocalSearchParams<{ date?: string }>();
+  const targetDate = params.date ?? todayKey();
   const [permission, requestPermission] = useCameraPermissions();
 
   const [stage, setStage] = useState<Stage>('scanning');
@@ -113,7 +115,7 @@ export default function BarcodeScreen() {
     setSaving(true);
     const macros = macrosForGrams(food, Number(grams));
     await insertLogEntry(db, {
-      date: todayKey(),
+      date: targetDate,
       foodId: food.id,
       foodName: food.name,
       grams: Number(grams),
@@ -199,6 +201,9 @@ export default function BarcodeScreen() {
               <Text style={[typography.caption, { color: colors.textMuted }]}>
                 {Math.round(food.caloriesPer100)} kcal / 100g · {caloriesPerGram} kcal per gram
               </Text>
+              {targetDate !== todayKey() && (
+                <Text style={[typography.caption, { color: colors.protein }]}>Logging to {formatShortDate(targetDate)}</Text>
+              )}
 
               <View>
                 <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.xs }]}>
