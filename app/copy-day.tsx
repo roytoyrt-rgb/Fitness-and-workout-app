@@ -6,10 +6,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, spacing, typography, radius } from '@/lib/theme';
 import { Button } from '@/components/Button';
-import { getRecentLogDates, getLogEntriesForDate, copyLogEntries } from '@/lib/queries';
+import {
+  getRecentLogDates,
+  getLogEntriesForDate,
+  copyLogEntries,
+  getExerciseEntriesForDate,
+  copyExerciseEntries,
+} from '@/lib/queries';
 import { todayKey, toDateKey, addDays, parseDateKey, WEEKDAY_LABELS, dayOfWeekMondayFirst, formatShortDate } from '@/lib/date';
 import { MEAL_SLOTS } from '@/lib/types';
-import type { DaySummary, LogEntry, MealSlot } from '@/lib/types';
+import type { DaySummary, ExerciseEntry, LogEntry, MealSlot } from '@/lib/types';
 
 const SLOT_LABELS: Record<MealSlot, string> = {
   breakfast: 'Breakfast',
@@ -36,7 +42,9 @@ export default function CopyDayScreen() {
   const [days, setDays] = useState<DaySummary[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [entries, setEntries] = useState<LogEntry[]>([]);
+  const [exerciseEntries, setExerciseEntries] = useState<ExerciseEntry[]>([]);
   const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [checkedExercise, setCheckedExercise] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -49,9 +57,14 @@ export default function CopyDayScreen() {
 
   const openDay = useCallback(
     async (dateKey: string) => {
-      const dayEntries = await getLogEntriesForDate(db, dateKey);
+      const [dayEntries, dayExercise] = await Promise.all([
+        getLogEntriesForDate(db, dateKey),
+        getExerciseEntriesForDate(db, dateKey),
+      ]);
       setEntries(dayEntries);
+      setExerciseEntries(dayExercise);
       setChecked(new Set(dayEntries.map((e) => e.id)));
+      setCheckedExercise(new Set(dayExercise.map((e) => e.id)));
       setSelectedDate(dateKey);
     },
     [db]
@@ -66,11 +79,26 @@ export default function CopyDayScreen() {
     });
   }
 
+  function toggleExercise(id: number) {
+    setCheckedExercise((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const totalChecked = checked.size + checkedExercise.size;
+
   async function copySelected() {
     const toCopy = entries.filter((e) => checked.has(e.id));
-    if (toCopy.length === 0) return;
+    const exerciseToCopy = exerciseEntries.filter((e) => checkedExercise.has(e.id));
+    if (toCopy.length === 0 && exerciseToCopy.length === 0) return;
     setSaving(true);
-    await copyLogEntries(db, toCopy, todayKey());
+    // Sequential, not Promise.all: both copy* helpers open their own transaction
+    // on the same db connection, and SQLite can't run two transactions at once.
+    if (toCopy.length > 0) await copyLogEntries(db, toCopy, todayKey());
+    if (exerciseToCopy.length > 0) await copyExerciseEntries(db, exerciseToCopy, todayKey());
     setSaving(false);
     router.back();
   }
@@ -150,13 +178,45 @@ export default function CopyDayScreen() {
                 </View>
               );
             })}
+
+            {exerciseEntries.length > 0 && (
+              <View>
+                <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.xs }]}>
+                  Exercise
+                </Text>
+                {exerciseEntries.map((entry) => {
+                  const isChecked = checkedExercise.has(entry.id);
+                  return (
+                    <Pressable
+                      key={entry.id}
+                      onPress={() => toggleExercise(entry.id)}
+                      style={[styles.entryRow, { borderColor: colors.border }]}
+                    >
+                      <View
+                        style={[
+                          styles.checkbox,
+                          { borderColor: colors.border, backgroundColor: isChecked ? colors.protein : 'transparent' },
+                        ]}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[typography.body, { color: colors.textPrimary }]}>{entry.name}</Text>
+                        <Text style={[typography.tiny, { color: colors.textMuted }]}>
+                          {entry.minutes ? `${entry.minutes} min · ` : ''}
+                          {Math.round(entry.calories)} kcal
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
           </ScrollView>
           <View style={[styles.footer, { borderColor: colors.border, backgroundColor: colors.bg }]}>
             <Button
-              title={`Copy ${checked.size} item${checked.size === 1 ? '' : 's'} to today`}
+              title={`Copy ${totalChecked} item${totalChecked === 1 ? '' : 's'} to today`}
               onPress={copySelected}
               loading={saving}
-              disabled={checked.size === 0}
+              disabled={totalChecked === 0}
             />
           </View>
         </View>

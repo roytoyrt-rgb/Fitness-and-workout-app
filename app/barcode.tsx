@@ -68,6 +68,14 @@ export default function BarcodeScreen() {
         return;
       }
 
+      const extended = {
+        fiber: json.fiberPer100 ?? null,
+        sugar: json.sugarPer100 ?? null,
+        sodium: json.sodiumPer100 ?? null,
+        saturatedFat: json.saturatedFatPer100 ?? null,
+        cholesterol: json.cholesterolPer100 ?? null,
+      };
+
       const foodId = await insertCustomFood(db, {
         name: json.name,
         caloriesPer100: json.caloriesPer100,
@@ -76,6 +84,7 @@ export default function BarcodeScreen() {
         fatPer100: json.fatPer100,
         defaultServingG: json.servingSizeG ?? 100,
         barcode: result.data,
+        ...extended,
       });
 
       setFood({
@@ -88,6 +97,7 @@ export default function BarcodeScreen() {
         defaultServingG: json.servingSizeG ?? 100,
         isCustom: true,
         barcode: result.data,
+        ...extended,
       });
       setGrams(String(json.servingSizeG ?? 100));
       setStage('result');

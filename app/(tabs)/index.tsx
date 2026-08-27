@@ -5,15 +5,22 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/Screen';
 import { Card } from '@/components/Card';
-import { MacroRing } from '@/components/MacroRing';
 import { MacroBarRow } from '@/components/MacroBarRow';
 import { useTheme, spacing, typography, radius } from '@/lib/theme';
-import { getGoals, getLogEntriesForDate, getMealPlanForWeek, deleteLogEntry, insertLogEntry } from '@/lib/queries';
+import {
+  getGoals,
+  getLogEntriesForDate,
+  getExerciseEntriesForDate,
+  getMealPlanForWeek,
+  deleteLogEntry,
+  deleteExerciseEntry,
+  insertLogEntry,
+} from '@/lib/queries';
 import { confirmAction } from '@/lib/confirm';
-import { sumMacros } from '@/lib/macros';
+import { sumMacros, sumExtendedNutrients } from '@/lib/macros';
 import { todayKey, weekStartKey, dayOfWeekMondayFirst, addDays, parseDateKey, toDateKey, formatShortDate, WEEKDAY_LABELS } from '@/lib/date';
 import { MEAL_SLOTS } from '@/lib/types';
-import type { Goals, LogEntry, MealPlanItem, MealSlot } from '@/lib/types';
+import type { Goals, LogEntry, ExerciseEntry, MealPlanItem, MealSlot } from '@/lib/types';
 
 const SLOT_LABELS: Record<MealSlot, string> = {
   breakfast: 'Breakfast',
@@ -30,6 +37,7 @@ export default function TodayScreen() {
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [goals, setGoals] = useState<Goals | null>(null);
   const [entries, setEntries] = useState<LogEntry[]>([]);
+  const [exerciseEntries, setExerciseEntries] = useState<ExerciseEntry[]>([]);
   const [dayPlan, setDayPlan] = useState<MealPlanItem[]>([]);
   const [weekPlanIsPersonalized, setWeekPlanIsPersonalized] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -39,13 +47,15 @@ export default function TodayScreen() {
 
   const load = useCallback(async () => {
     const dateObj = parseDateKey(selectedDate);
-    const [g, e, plan] = await Promise.all([
+    const [g, e, ex, plan] = await Promise.all([
       getGoals(db),
       getLogEntriesForDate(db, selectedDate),
+      getExerciseEntriesForDate(db, selectedDate),
       getMealPlanForWeek(db, weekStartKey(dateObj)),
     ]);
     setGoals(g);
     setEntries(e);
+    setExerciseEntries(ex);
     setDayPlan(plan.filter((p) => p.dayOfWeek === dayOfWeekMondayFirst(dateObj)));
     setWeekPlanIsPersonalized(plan.some((p) => p.source === 'ai'));
   }, [db, selectedDate]);
@@ -86,6 +96,19 @@ export default function TodayScreen() {
     );
   }
 
+  function handleDeleteExercise(entry: ExerciseEntry) {
+    confirmAction(
+      'Remove exercise',
+      `Remove "${entry.name}"?`,
+      'Remove',
+      async () => {
+        await deleteExerciseEntry(db, entry.id);
+        load();
+      },
+      true
+    );
+  }
+
   async function handleQuickLog(meal: MealPlanItem) {
     await insertLogEntry(db, {
       date: selectedDate,
@@ -104,6 +127,13 @@ export default function TodayScreen() {
   if (!goals) return null;
 
   const totals = sumMacros(entries);
+  const extended = sumExtendedNutrients(entries);
+  const hasExtendedData = entries.some(
+    (e) => e.fiber != null || e.sugar != null || e.sodium != null || e.saturatedFat != null || e.cholesterol != null
+  );
+  const exerciseCalories = exerciseEntries.reduce((sum, e) => sum + e.calories, 0);
+  const remaining = Math.round(goals.calories - totals.calories + exerciseCalories);
+
   const dateObj = parseDateKey(selectedDate);
   const yesterday = toDateKey(addDays(new Date(), -1));
   const dayLabel = isToday ? 'Today' : selectedDate === yesterday ? 'Yesterday' : WEEKDAY_LABELS[dayOfWeekMondayFirst(dateObj)];
@@ -163,14 +193,42 @@ export default function TodayScreen() {
         </Pressable>
       )}
 
-      <Card style={styles.ringCard}>
-        <MacroRing consumed={totals.calories} goal={goals.calories} />
-        <View style={{ width: '100%', gap: spacing.md }}>
+      <Card style={styles.remainingCard}>
+        <Text
+          style={[
+            typography.hero,
+            { color: remaining < 0 ? colors.critical : colors.textPrimary, textAlign: 'center' },
+          ]}
+        >
+          {remaining}
+        </Text>
+        <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center' }]}>Calories Remaining</Text>
+
+        <View style={styles.remainingBreakdown}>
+          <RemainingStat label="Goal" value={Math.round(goals.calories)} colors={colors} />
+          <Text style={[typography.subtitle, { color: colors.textMuted }]}>−</Text>
+          <RemainingStat label="Food" value={Math.round(totals.calories)} colors={colors} />
+          <Text style={[typography.subtitle, { color: colors.textMuted }]}>+</Text>
+          <RemainingStat label="Exercise" value={Math.round(exerciseCalories)} colors={colors} />
+        </View>
+
+        <View style={{ width: '100%', gap: spacing.md, marginTop: spacing.md }}>
           <MacroBarRow label="Protein" color={colors.protein} consumed={totals.protein} goal={goals.protein} />
           <MacroBarRow label="Carbs" color={colors.carbs} consumed={totals.carbs} goal={goals.carbs} />
           <MacroBarRow label="Fat" color={colors.fat} consumed={totals.fat} goal={goals.fat} />
         </View>
       </Card>
+
+      {hasExtendedData && (
+        <Card>
+          <Text style={[typography.subtitle, { color: colors.textPrimary }]}>Nutrition</Text>
+          <NutrientRow label="Fiber" value={extended.fiber} unit="g" colors={colors} />
+          <NutrientRow label="Sugar" value={extended.sugar} unit="g" colors={colors} />
+          <NutrientRow label="Saturated Fat" value={extended.saturatedFat} unit="g" colors={colors} />
+          <NutrientRow label="Sodium" value={extended.sodium} unit="mg" colors={colors} />
+          <NutrientRow label="Cholesterol" value={extended.cholesterol} unit="mg" colors={colors} />
+        </Card>
+      )}
 
       {MEAL_SLOTS.map((slot) => {
         const slotEntries = entries.filter((e) => e.mealSlot === slot);
@@ -223,7 +281,66 @@ export default function TodayScreen() {
           </Card>
         );
       })}
+
+      <Card>
+        <View style={styles.sectionHeader}>
+          <Text style={[typography.subtitle, { color: colors.textPrimary }]}>Exercise</Text>
+          <Pressable onPress={() => router.push({ pathname: '/add-exercise', params: { date: selectedDate } })}>
+            <Ionicons name="add-circle-outline" size={24} color={colors.protein} />
+          </Pressable>
+        </View>
+
+        {exerciseEntries.length === 0 && (
+          <Text style={[typography.body, { color: colors.textMuted }]}>Nothing logged yet.</Text>
+        )}
+
+        {exerciseEntries.map((entry) => (
+          <Pressable key={entry.id} onLongPress={() => handleDeleteExercise(entry)} style={styles.entryRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[typography.body, { color: colors.textPrimary }]}>{entry.name}</Text>
+              <Text style={[typography.tiny, { color: colors.textMuted }]}>
+                {entry.minutes ? `${entry.minutes} min · ` : ''}
+                {Math.round(entry.calories)} kcal burned
+              </Text>
+            </View>
+            <Pressable onPress={() => handleDeleteExercise(entry)} hitSlop={8}>
+              <Ionicons name="close-circle-outline" size={20} color={colors.textMuted} />
+            </Pressable>
+          </Pressable>
+        ))}
+      </Card>
     </Screen>
+  );
+}
+
+function RemainingStat({ label, value, colors }: { label: string; value: number; colors: ReturnType<typeof useTheme>['colors'] }) {
+  return (
+    <View style={styles.remainingStat}>
+      <Text style={[typography.body, { color: colors.textPrimary }]}>{value}</Text>
+      <Text style={[typography.tiny, { color: colors.textMuted }]}>{label}</Text>
+    </View>
+  );
+}
+
+function NutrientRow({
+  label,
+  value,
+  unit,
+  colors,
+}: {
+  label: string;
+  value: number;
+  unit: string;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  return (
+    <View style={[styles.nutrientRow, { borderTopColor: colors.border }]}>
+      <Text style={[typography.body, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={[typography.body, { color: colors.textPrimary }]}>
+        {Math.round(value * 10) / 10}
+        {unit}
+      </Text>
+    </View>
   );
 }
 
@@ -232,7 +349,15 @@ const styles = StyleSheet.create({
   dateNavButton: { padding: spacing.xs },
   dateNavCenter: { alignItems: 'center' },
   jumpToday: { alignSelf: 'center' },
-  ringCard: { alignItems: 'center', gap: spacing.lg },
+  remainingCard: { alignItems: 'center', gap: spacing.xs },
+  remainingBreakdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  remainingStat: { alignItems: 'center', minWidth: 56 },
   quickActions: { flexDirection: 'row', gap: spacing.sm },
   quickAction: {
     flex: 1,
@@ -258,6 +383,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.xs,
     gap: spacing.sm,
+  },
+  nutrientRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   suggestion: {
     flexDirection: 'row',

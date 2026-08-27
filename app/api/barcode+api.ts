@@ -8,6 +8,11 @@ interface BarcodeResult {
   carbsPer100?: number;
   fatPer100?: number;
   servingSizeG?: number | null;
+  fiberPer100?: number | null;
+  sugarPer100?: number | null;
+  sodiumPer100?: number | null; // mg
+  saturatedFatPer100?: number | null;
+  cholesterolPer100?: number | null; // mg
 }
 
 function parseServingSize(raw: unknown): number | null {
@@ -50,6 +55,10 @@ export async function GET(request: Request): Promise<Response> {
       return Response.json({ found: false } satisfies BarcodeResult);
     }
 
+    // Open Food Facts stores sodium/cholesterol in grams per 100g;
+    // nutrition labels conventionally show them in milligrams.
+    const toMg = (v: unknown) => (typeof v === 'number' ? round1(v * 1000) : null);
+
     const result: BarcodeResult = {
       found: true,
       name: product.product_name || product.generic_name || 'Unknown product',
@@ -58,6 +67,11 @@ export async function GET(request: Request): Promise<Response> {
       carbsPer100: round1(n['carbohydrates_100g'] ?? 0),
       fatPer100: round1(n['fat_100g'] ?? 0),
       servingSizeG: parseServingSize(product.serving_size),
+      fiberPer100: typeof n['fiber_100g'] === 'number' ? round1(n['fiber_100g']) : null,
+      sugarPer100: typeof n['sugars_100g'] === 'number' ? round1(n['sugars_100g']) : null,
+      sodiumPer100: toMg(n['sodium_100g']),
+      saturatedFatPer100: typeof n['saturated-fat_100g'] === 'number' ? round1(n['saturated-fat_100g']) : null,
+      cholesterolPer100: toMg(n['cholesterol_100g']),
     };
 
     return Response.json(result);

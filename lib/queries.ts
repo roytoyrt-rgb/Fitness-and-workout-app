@@ -1,5 +1,16 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import type { DaySummary, Food, FoodPreference, Goals, LogEntry, MealPlanItem, MealSlot, MealTemplate, PreferenceType } from './types';
+import type {
+  DaySummary,
+  ExerciseEntry,
+  Food,
+  FoodPreference,
+  Goals,
+  LogEntry,
+  MealPlanItem,
+  MealSlot,
+  MealTemplate,
+  PreferenceType,
+} from './types';
 
 // ---- Goals ----
 
@@ -46,6 +57,11 @@ function mapFoodRow(row: any): Food {
     defaultServingG: row.default_serving_g,
     isCustom: !!row.is_custom,
     barcode: row.barcode ?? null,
+    fiber: row.fiber_per_100 ?? null,
+    sugar: row.sugar_per_100 ?? null,
+    sodium: row.sodium_per_100 ?? null,
+    saturatedFat: row.saturated_fat_per_100 ?? null,
+    cholesterol: row.cholesterol_per_100 ?? null,
   };
 }
 
@@ -67,7 +83,8 @@ export async function insertCustomFood(
   food: Omit<Food, 'id' | 'isCustom'>
 ): Promise<number> {
   const result = await db.runAsync(
-    'INSERT INTO foods (name, calories_per_100, protein_per_100, carbs_per_100, fat_per_100, default_serving_g, is_custom, barcode) VALUES (?, ?, ?, ?, ?, ?, 1, ?)',
+    `INSERT INTO foods (name, calories_per_100, protein_per_100, carbs_per_100, fat_per_100, default_serving_g, is_custom, barcode, fiber_per_100, sugar_per_100, sodium_per_100, saturated_fat_per_100, cholesterol_per_100)
+     VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
     [
       food.name,
       food.caloriesPer100,
@@ -76,6 +93,11 @@ export async function insertCustomFood(
       food.fatPer100,
       food.defaultServingG,
       food.barcode ?? null,
+      food.fiber ?? null,
+      food.sugar ?? null,
+      food.sodium ?? null,
+      food.saturatedFat ?? null,
+      food.cholesterol ?? null,
     ]
   );
   return result.lastInsertRowId;
@@ -96,6 +118,11 @@ function mapLogRow(row: any): LogEntry {
     fat: row.fat,
     mealSlot: row.meal_slot,
     createdAt: row.created_at,
+    fiber: row.fiber ?? null,
+    sugar: row.sugar ?? null,
+    sodium: row.sodium ?? null,
+    saturatedFat: row.saturated_fat ?? null,
+    cholesterol: row.cholesterol ?? null,
   };
 }
 
@@ -124,7 +151,8 @@ export async function insertLogEntry(
   entry: Omit<LogEntry, 'id' | 'createdAt'>
 ): Promise<number> {
   const result = await db.runAsync(
-    'INSERT INTO log_entries (date, food_id, food_name, grams, calories, protein, carbs, fat, meal_slot, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    `INSERT INTO log_entries (date, food_id, food_name, grams, calories, protein, carbs, fat, meal_slot, created_at, fiber, sugar, sodium, saturated_fat, cholesterol)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       entry.date,
       entry.foodId,
@@ -136,6 +164,11 @@ export async function insertLogEntry(
       entry.fat,
       entry.mealSlot,
       new Date().toISOString(),
+      entry.fiber ?? null,
+      entry.sugar ?? null,
+      entry.sodium ?? null,
+      entry.saturatedFat ?? null,
+      entry.cholesterol ?? null,
     ]
   );
   return result.lastInsertRowId;
@@ -166,7 +199,8 @@ export async function copyLogEntries(
   await db.withTransactionAsync(async () => {
     for (const entry of entries) {
       await db.runAsync(
-        'INSERT INTO log_entries (date, food_id, food_name, grams, calories, protein, carbs, fat, meal_slot, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        `INSERT INTO log_entries (date, food_id, food_name, grams, calories, protein, carbs, fat, meal_slot, created_at, fiber, sugar, sodium, saturated_fat, cholesterol)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           toDate,
           entry.foodId,
@@ -178,6 +212,11 @@ export async function copyLogEntries(
           entry.fat,
           entry.mealSlot,
           new Date().toISOString(),
+          entry.fiber ?? null,
+          entry.sugar ?? null,
+          entry.sodium ?? null,
+          entry.saturatedFat ?? null,
+          entry.cholesterol ?? null,
         ]
       );
     }
@@ -318,4 +357,51 @@ export async function setFoodPreference(db: SQLiteDatabase, foodName: string, pr
 
 export async function removeFoodPreference(db: SQLiteDatabase, foodName: string): Promise<void> {
   await db.runAsync('DELETE FROM food_preferences WHERE food_name = ? COLLATE NOCASE', [foodName]);
+}
+
+// ---- Exercise entries ----
+
+function mapExerciseRow(row: any): ExerciseEntry {
+  return {
+    id: row.id,
+    date: row.date,
+    name: row.name,
+    calories: row.calories,
+    minutes: row.minutes ?? null,
+    createdAt: row.created_at,
+  };
+}
+
+export async function getExerciseEntriesForDate(db: SQLiteDatabase, date: string): Promise<ExerciseEntry[]> {
+  const rows = await db.getAllAsync<any>('SELECT * FROM exercise_entries WHERE date = ? ORDER BY created_at ASC', [date]);
+  return rows.map(mapExerciseRow);
+}
+
+export async function insertExerciseEntry(
+  db: SQLiteDatabase,
+  entry: Omit<ExerciseEntry, 'id' | 'createdAt'>
+): Promise<number> {
+  const result = await db.runAsync(
+    'INSERT INTO exercise_entries (date, name, calories, minutes, created_at) VALUES (?, ?, ?, ?, ?)',
+    [entry.date, entry.name, entry.calories, entry.minutes, new Date().toISOString()]
+  );
+  return result.lastInsertRowId;
+}
+
+export async function deleteExerciseEntry(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync('DELETE FROM exercise_entries WHERE id = ?', [id]);
+}
+
+export async function copyExerciseEntries(db: SQLiteDatabase, entries: ExerciseEntry[], toDate: string): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    for (const entry of entries) {
+      await db.runAsync('INSERT INTO exercise_entries (date, name, calories, minutes, created_at) VALUES (?, ?, ?, ?, ?)', [
+        toDate,
+        entry.name,
+        entry.calories,
+        entry.minutes,
+        new Date().toISOString(),
+      ]);
+    }
+  });
 }

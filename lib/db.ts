@@ -78,6 +78,16 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
       created_at TEXT NOT NULL
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_food_preferences_name ON food_preferences(food_name COLLATE NOCASE);
+
+    CREATE TABLE IF NOT EXISTS exercise_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      name TEXT NOT NULL,
+      calories REAL NOT NULL,
+      minutes REAL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_exercise_entries_date ON exercise_entries(date);
   `);
 
   // foods.barcode was added after the initial release - add it if an
@@ -87,6 +97,26 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     await db.execAsync('ALTER TABLE foods ADD COLUMN barcode TEXT');
   }
   await db.execAsync('CREATE UNIQUE INDEX IF NOT EXISTS idx_foods_barcode ON foods(barcode) WHERE barcode IS NOT NULL');
+
+  // Extended nutrition fields (MyFitnessPal-style detail beyond the core
+  // 4 macros). Nullable throughout - the built-in food library isn't
+  // populated with these (that's a lot of data for low payoff), but
+  // barcode scans pull them from Open Food Facts automatically and custom
+  // entries can add them, so real coverage grows from actual usage.
+  const extendedNutrientColumns = ['fiber_per_100', 'sugar_per_100', 'sodium_per_100', 'saturated_fat_per_100', 'cholesterol_per_100'];
+  for (const col of extendedNutrientColumns) {
+    if (!columns.some((c) => c.name === col)) {
+      await db.execAsync(`ALTER TABLE foods ADD COLUMN ${col} REAL`);
+    }
+  }
+
+  const logColumns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(log_entries)');
+  const extendedLogColumns = ['fiber', 'sugar', 'sodium', 'saturated_fat', 'cholesterol'];
+  for (const col of extendedLogColumns) {
+    if (!logColumns.some((c) => c.name === col)) {
+      await db.execAsync(`ALTER TABLE log_entries ADD COLUMN ${col} REAL`);
+    }
+  }
 
   const goalsRow = await db.getFirstAsync<{ id: number }>('SELECT id FROM goals WHERE id = 1');
   if (!goalsRow) {

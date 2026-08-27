@@ -1,4 +1,4 @@
-import type { Macros } from './types';
+import type { ExtendedNutrients, Macros } from './types';
 
 export const CALORIES_PER_GRAM = { protein: 4, carbs: 4, fat: 9 };
 
@@ -10,16 +10,26 @@ export const DEFAULT_GOALS: Macros = {
   fat: 70,
 };
 
-export function macrosForGrams(
-  per100: { caloriesPer100: number; proteinPer100: number; carbsPer100: number; fatPer100: number },
-  grams: number
-): Macros {
+interface Per100 extends ExtendedNutrients {
+  caloriesPer100: number;
+  proteinPer100: number;
+  carbsPer100: number;
+  fatPer100: number;
+}
+
+export function macrosForGrams(per100: Per100, grams: number): Macros & ExtendedNutrients {
   const factor = grams / 100;
+  const scale = (v: number | null | undefined) => (v == null ? null : round1(v * factor));
   return {
     calories: Math.round(per100.caloriesPer100 * factor),
     protein: round1(per100.proteinPer100 * factor),
     carbs: round1(per100.carbsPer100 * factor),
     fat: round1(per100.fatPer100 * factor),
+    fiber: scale(per100.fiber),
+    sugar: scale(per100.sugar),
+    sodium: scale(per100.sodium),
+    saturatedFat: scale(per100.saturatedFat),
+    cholesterol: scale(per100.cholesterol),
   };
 }
 
@@ -32,6 +42,30 @@ export function sumMacros(entries: Macros[]): Macros {
       fat: acc.fat + m.fat,
     }),
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+}
+
+export interface NutrientTotals {
+  fiber: number;
+  sugar: number;
+  sodium: number;
+  saturatedFat: number;
+  cholesterol: number;
+}
+
+// Sums whatever extended nutrients are present, treating missing values as 0
+// - this is a best-effort daily total, not guaranteed complete (see
+// ExtendedNutrients doc comment on why coverage is partial).
+export function sumExtendedNutrients(entries: ExtendedNutrients[]): NutrientTotals {
+  return entries.reduce<NutrientTotals>(
+    (acc, e) => ({
+      fiber: acc.fiber + (e.fiber ?? 0),
+      sugar: acc.sugar + (e.sugar ?? 0),
+      sodium: acc.sodium + (e.sodium ?? 0),
+      saturatedFat: acc.saturatedFat + (e.saturatedFat ?? 0),
+      cholesterol: acc.cholesterol + (e.cholesterol ?? 0),
+    }),
+    { fiber: 0, sugar: 0, sodium: 0, saturatedFat: 0, cholesterol: 0 }
   );
 }
 

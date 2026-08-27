@@ -9,15 +9,17 @@ interface BackupData {
   goals: Record<string, unknown> | null;
   foods: Record<string, unknown>[];
   logEntries: Record<string, unknown>[];
+  exerciseEntries: Record<string, unknown>[];
   mealPlanItems: Record<string, unknown>[];
   settings: Record<string, unknown>[];
 }
 
 export async function buildBackupJson(db: SQLiteDatabase): Promise<string> {
-  const [goals, foods, logEntries, mealPlanItems, settings] = await Promise.all([
+  const [goals, foods, logEntries, exerciseEntries, mealPlanItems, settings] = await Promise.all([
     db.getFirstAsync<Record<string, unknown>>('SELECT * FROM goals WHERE id = 1'),
     db.getAllAsync<Record<string, unknown>>('SELECT * FROM foods WHERE is_custom = 1'),
     db.getAllAsync<Record<string, unknown>>('SELECT * FROM log_entries'),
+    db.getAllAsync<Record<string, unknown>>('SELECT * FROM exercise_entries'),
     db.getAllAsync<Record<string, unknown>>('SELECT * FROM meal_plan_items'),
     db.getAllAsync<Record<string, unknown>>('SELECT * FROM settings'),
   ]);
@@ -28,6 +30,7 @@ export async function buildBackupJson(db: SQLiteDatabase): Promise<string> {
     goals: goals ?? null,
     foods,
     logEntries,
+    exerciseEntries,
     mealPlanItems,
     settings,
   };
@@ -74,6 +77,7 @@ export async function restoreBackup(db: SQLiteDatabase, json: string): Promise<v
 
   await db.withTransactionAsync(async () => {
     await db.runAsync('DELETE FROM log_entries');
+    await db.runAsync('DELETE FROM exercise_entries');
     await db.runAsync('DELETE FROM meal_plan_items');
     await db.runAsync('DELETE FROM foods WHERE is_custom = 1');
 
@@ -87,16 +91,36 @@ export async function restoreBackup(db: SQLiteDatabase, json: string): Promise<v
     for (const food of data.foods ?? []) {
       const f = food as any;
       await db.runAsync(
-        'INSERT INTO foods (name, calories_per_100, protein_per_100, carbs_per_100, fat_per_100, default_serving_g, is_custom, barcode) VALUES (?, ?, ?, ?, ?, ?, 1, ?)',
-        [f.name, f.calories_per_100, f.protein_per_100, f.carbs_per_100, f.fat_per_100, f.default_serving_g, f.barcode ?? null]
+        `INSERT INTO foods (
+          name, calories_per_100, protein_per_100, carbs_per_100, fat_per_100, default_serving_g, is_custom, barcode,
+          fiber_per_100, sugar_per_100, sodium_per_100, saturated_fat_per_100, cholesterol_per_100
+        ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
+        [
+          f.name, f.calories_per_100, f.protein_per_100, f.carbs_per_100, f.fat_per_100, f.default_serving_g, f.barcode ?? null,
+          f.fiber_per_100 ?? null, f.sugar_per_100 ?? null, f.sodium_per_100 ?? null, f.saturated_fat_per_100 ?? null, f.cholesterol_per_100 ?? null,
+        ]
       );
     }
 
     for (const entry of data.logEntries ?? []) {
       const e = entry as any;
       await db.runAsync(
-        'INSERT INTO log_entries (date, food_id, food_name, grams, calories, protein, carbs, fat, meal_slot, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [e.date, null, e.food_name, e.grams, e.calories, e.protein, e.carbs, e.fat, e.meal_slot, e.created_at ?? new Date().toISOString()]
+        `INSERT INTO log_entries (
+          date, food_id, food_name, grams, calories, protein, carbs, fat, meal_slot, created_at,
+          fiber, sugar, sodium, saturated_fat, cholesterol
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          e.date, null, e.food_name, e.grams, e.calories, e.protein, e.carbs, e.fat, e.meal_slot, e.created_at ?? new Date().toISOString(),
+          e.fiber ?? null, e.sugar ?? null, e.sodium ?? null, e.saturated_fat ?? null, e.cholesterol ?? null,
+        ]
+      );
+    }
+
+    for (const entry of data.exerciseEntries ?? []) {
+      const ex = entry as any;
+      await db.runAsync(
+        'INSERT INTO exercise_entries (date, name, calories, minutes, created_at) VALUES (?, ?, ?, ?, ?)',
+        [ex.date, ex.name, ex.calories, ex.minutes ?? null, ex.created_at ?? new Date().toISOString()]
       );
     }
 

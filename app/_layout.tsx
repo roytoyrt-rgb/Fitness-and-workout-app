@@ -27,6 +27,7 @@ export default function RootLayout() {
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="add-food" options={{ presentation: 'modal', title: 'Add Food' }} />
+          <Stack.Screen name="add-exercise" options={{ presentation: 'modal', title: 'Add Exercise' }} />
           <Stack.Screen name="scan" options={{ presentation: 'modal', title: 'Scan Ingredients' }} />
           <Stack.Screen name="barcode" options={{ presentation: 'modal', title: 'Scan Barcode' }} />
           <Stack.Screen name="copy-day" options={{ presentation: 'modal', title: 'Copy a Day' }} />

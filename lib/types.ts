@@ -14,7 +14,19 @@ export interface Goals extends Macros {
   updatedAt: string;
 }
 
-export interface Food {
+// Beyond-the-core-4 nutrients, MyFitnessPal-style. Every field is optional -
+// most sources of a food (the built-in library, AI-generated meals) don't
+// have this detail, but barcode scans (via Open Food Facts) and custom
+// entries can supply it.
+export interface ExtendedNutrients {
+  fiber?: number | null;
+  sugar?: number | null;
+  sodium?: number | null; // mg
+  saturatedFat?: number | null;
+  cholesterol?: number | null; // mg
+}
+
+export interface Food extends ExtendedNutrients {
   id: number;
   name: string;
   caloriesPer100: number;
@@ -32,7 +44,7 @@ export interface DaySummary {
   calories: number;
 }
 
-export interface LogEntry {
+export interface LogEntry extends ExtendedNutrients {
   id: number;
   date: string; // YYYY-MM-DD
   foodId: number | null;
@@ -43,6 +55,15 @@ export interface LogEntry {
   carbs: number;
   fat: number;
   mealSlot: MealSlot;
+  createdAt: string;
+}
+
+export interface ExerciseEntry {
+  id: number;
+  date: string; // YYYY-MM-DD
+  name: string;
+  calories: number;
+  minutes: number | null;
   createdAt: string;
 }
 
