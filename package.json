@@ -33,7 +33,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build": "expo export --platform web",
+    "build": "node -r ./scripts/ssr-polyfills.js ./node_modules/.bin/expo export --platform web",
     "start": "node server.js"
   },
   "engines": {
