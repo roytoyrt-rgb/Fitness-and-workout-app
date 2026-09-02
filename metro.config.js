@@ -1,3 +1,8 @@
+// Loaded first, and from here rather than the build script, so it applies no
+// matter how the export is invoked (npm run build, npx expo export, or a
+// host's own build command). See the file for what it works around.
+require('./scripts/ssr-polyfills');
+
 const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
